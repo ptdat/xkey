@@ -82,6 +82,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Used to restore when leaving the rule-controlled context
     private var preRuleInputSourceId: String? = nil
     
+    /// Coordination flag: bundle ID of the app whose engine state was already set by handleSmartSwitch.
+    /// Prevents handleInputSourceChange (which fires async ~100-300ms later when macOS auto-restores IS)
+    /// from overriding the engine state that handleSmartSwitch already set correctly.
+    /// Consumed (set to nil) after handleInputSourceChange reads it.
+    private var smartSwitchHandledBundleId: String? = nil
+    
     /// Track the last focused element's signature for injection detection
     /// Used to detect when user switches from web content to address bar, etc.
     /// Signature includes role, subrole, and description/identifier
@@ -1330,14 +1336,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleSmartSwitch(notification: Notification) {
         guard let handler = keyboardHandler else { return }
         
-        // IMPORTANT: Check Input Source config first - it takes priority over everything
-        // If current Input Source is configured as disabled, don't allow Vietnamese to be enabled
-        if let currentSource = InputSourceManager.getCurrentInputSource() {
-            let inputSourceEnabled = InputSourceManager.shared.isEnabled(for: currentSource.id)
-            if !inputSourceEnabled {
-                return
-            }
-        }
+        // Clear stale coordination flag from previous app switch cycle.
+        // Each app switch is a fresh cycle — if this function returns early
+        // (overlay, IS disabled, etc.), the flag must not carry over.
+        smartSwitchHandledBundleId = nil
         
         // Skip if overlay is visible — overlay Smart Switch is handled by setupOverlayDetectorCallback
         // This avoids redundant double-fire when Raycast/Alfred become frontmost app
@@ -1375,6 +1377,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         } else {
             // No rule matches - restore pre-rule input source if we have one
+            // NOTE: This MUST run even when current IS is disabled (e.g., XKey IS from previous rule).
+            // Previously, the IS-disabled guard at the top blocked this entire function,
+            // causing preRuleInputSourceId to leak across app switches.
             if let savedInputSourceId = preRuleInputSourceId {
                 let currentId = InputSourceSwitcher.shared.getCurrentInputSourceId()
                 if currentId != savedInputSourceId {
@@ -1386,6 +1391,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 }
                 preRuleInputSourceId = nil
+            }
+        }
+        
+        // Check Input Source config AFTER rule restore.
+        // TISSelectInputSource changes the active IS synchronously, so re-querying here
+        // returns the restored IS (not the old rule-controlled XKey IS).
+        // If the restored IS is also disabled, we correctly stop here.
+        if let currentSource = InputSourceManager.getCurrentInputSource() {
+            let inputSourceEnabled = InputSourceManager.shared.isEnabled(for: currentSource.id)
+            if !inputSourceEnabled {
+                debugWindowController?.logEvent("Smart Switch: Skipped (IS '\(currentSource.displayName)' disabled)")
+                return
             }
         }
         
@@ -1409,6 +1426,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // App is new or language hasn't changed - save current language
             handler.engine.saveAppLanguage(bundleId: bundleId, language: currentLanguage)
         }
+        
+        // Set coordination flag so handleInputSourceChange (which fires async ~100-300ms later
+        // when macOS delivers kTISNotifySelectedKeyboardInputSourceChanged) won't override
+        // the engine state we just set.
+        smartSwitchHandledBundleId = bundleId
     }
     
     private func setupMouseClickMonitor() {
@@ -1670,11 +1692,51 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 debugWindowController?.logEvent("Failed to start event tap: \(error)")
             }
 
+            // Determine effective engine state, considering Smart Switch per-app data.
+            // `shouldEnable` comes from global IS config (InputSourceConfig.isXKeyEnabled).
+            // When shouldEnable=true, we also check if the current app has a saved language
+            // preference that overrides the global config.
+            var effectiveEnable = shouldEnable
+            
+            if shouldEnable {
+                // Check coordination flag: if handleSmartSwitch already processed this app switch,
+                // don't override its decision. This prevents the async IS change notification
+                // (~100-300ms after app switch) from clobbering Smart Switch state.
+                if let handledBundle = smartSwitchHandledBundleId,
+                   let frontmostBundle = NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
+                   handledBundle == frontmostBundle {
+                    // Consume the flag and skip engine state change — Smart Switch already handled it
+                    smartSwitchHandledBundleId = nil
+                    debugWindowController?.logEvent("'\(source.displayName)' → Smart Switch already handled, skipping engine change")
+                    return
+                }
+                
+                // No coordination flag — this IS change is NOT from an app switch that
+                // handleSmartSwitch processed (e.g., user manually switched IS, or
+                // handleSmartSwitch was blocked by overlay/guard).
+                // Consult Smart Switch per-app data directly.
+                if let handler = self.keyboardHandler, handler.smartSwitchEnabled,
+                   let bundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier {
+                    let savedLanguage = handler.engine.smartSwitchManager.getAppLanguage(
+                        bundleId: bundleId, currentLanguage: 0  // currentLanguage unused in getAppLanguage
+                    )
+                    if savedLanguage == 0 {
+                        // App has saved English preference — override shouldEnable
+                        effectiveEnable = false
+                        debugWindowController?.logEvent("'\(source.displayName)' → Smart Switch override: '\(bundleId)' saved English")
+                    }
+                    // savedLanguage == 1 or -1 (new app): keep effectiveEnable = true
+                }
+            }
+            
+            // Clear coordination flag if it wasn't consumed above (different app or shouldEnable=false)
+            smartSwitchHandledBundleId = nil
+
             // Get current state
             let currentlyEnabled = self.statusBarManager?.viewModel.isVietnameseEnabled ?? false
 
-            // Auto enable/disable Vietnamese mode based on configuration
-            if shouldEnable {
+            // Auto enable/disable Vietnamese mode based on effective state
+            if effectiveEnable {
                 // Enable Vietnamese mode
                 if !currentlyEnabled {
                     self.statusBarManager?.viewModel.isVietnameseEnabled = true
