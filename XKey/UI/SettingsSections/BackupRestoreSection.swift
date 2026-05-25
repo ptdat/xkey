@@ -16,10 +16,109 @@ struct BackupRestoreSection: View {
     @State private var alertMessage = ""
     @State private var countdownTimer: Timer?
     @State private var restartReason: RestartReason = .importSettings
-    
+    @State private var iCloudSyncEnabled = iCloudSyncManager.shared.isEnabled
+    @State private var syncStatus = iCloudSyncManager.shared.status
+    @State private var lastSyncDate = iCloudSyncManager.shared.lastSyncDate
+    @State private var syncStatusObserver: NSObjectProtocol?
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                // iCloud Sync Section
+                SettingsGroup(title: "iCloud Sync") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle(isOn: $iCloudSyncEnabled) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "icloud")
+                                Text("Đồng bộ thiết lập qua iCloud")
+                            }
+                        }
+                        .onChange(of: iCloudSyncEnabled) { newValue in
+                            iCloudSyncManager.shared.isEnabled = newValue
+                            syncStatus = iCloudSyncManager.shared.status
+                            lastSyncDate = iCloudSyncManager.shared.lastSyncDate
+                        }
+
+                        if iCloudSyncEnabled {
+                            Divider()
+
+                            HStack(spacing: 6) {
+                                iCloudSyncStatusIcon(syncStatus)
+                                iCloudSyncStatusText(syncStatus, lastSyncDate: lastSyncDate)
+                                Spacer()
+                                Button(action: {
+                                    iCloudSyncManager.shared.pushToCloud()
+                                    syncStatus = iCloudSyncManager.shared.status
+                                    lastSyncDate = iCloudSyncManager.shared.lastSyncDate
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "arrow.triangle.2.circlepath")
+                                        Text("Đồng bộ ngay")
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Dữ liệu được đồng bộ:")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.secondary)
+
+                                HStack(spacing: 12) {
+                                    iCloudSyncItem(icon: "gearshape", text: "Thiết lập")
+                                    iCloudSyncItem(icon: "keyboard", text: "Hotkeys")
+                                    iCloudSyncItem(icon: "text.badge.plus", text: "Macro")
+                                }
+                                HStack(spacing: 12) {
+                                    iCloudSyncItem(icon: "text.book.closed", text: "Từ điển")
+                                    iCloudSyncItem(icon: "list.bullet", text: "Quy tắc")
+                                    iCloudSyncItem(icon: "globe", text: "Dịch thuật")
+                                }
+                            }
+
+                            HStack {
+                                if let size = iCloudSyncManager.shared.syncDataSizeBytes {
+                                    let sizeStr = ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+                                    Text(String(localized: "Dung lượng: \(sizeStr) / 1 MB"))
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Button(action: exportFromiCloud) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "square.and.arrow.up.on.square")
+                                        Text("Export từ iCloud")
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .disabled(iCloudSyncManager.shared.syncDataSizeBytes == nil)
+                            }
+                        } else {
+                            Text("Tự động đồng bộ cài đặt giữa các máy Mac cùng tài khoản iCloud.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .onAppear {
+                    syncStatusObserver = NotificationCenter.default.addObserver(
+                        forName: .iCloudSyncStatusDidChange,
+                        object: nil,
+                        queue: .main
+                    ) { _ in
+                        syncStatus = iCloudSyncManager.shared.status
+                        lastSyncDate = iCloudSyncManager.shared.lastSyncDate
+                    }
+                }
+                .onDisappear {
+                    if let observer = syncStatusObserver {
+                        NotificationCenter.default.removeObserver(observer)
+                    }
+                }
+
                 // Export Section
                 SettingsGroup(title: "Sao lưu thiết lập") {
                     VStack(alignment: .leading, spacing: 8) {
@@ -204,6 +303,31 @@ struct BackupRestoreSection: View {
         }
     }
     
+    private func exportFromiCloud() {
+        guard let data = iCloudSyncManager.shared.exportCloudData() else {
+            showAlert(title: String(localized: "Lỗi"), message: String(localized: "Không có dữ liệu trên iCloud"))
+            return
+        }
+
+        let panel = NSSavePanel()
+        panel.title = "Export iCloud Settings"
+        panel.message = String(localized: "Lưu thiết lập từ iCloud ra file")
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        panel.nameFieldStringValue = "XKey-iCloud-\(df.string(from: Date())).plist"
+        panel.allowedContentTypes = [.propertyList]
+        panel.canCreateDirectories = true
+
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                try data.write(to: url)
+                showAlert(title: String(localized: "Thành công"), message: String(localized: "Đã export thiết lập từ iCloud"))
+            } catch {
+                showAlert(title: String(localized: "Lỗi"), message: String(localized: "Không thể lưu file: \(error.localizedDescription)"))
+            }
+        }
+    }
+
     // MARK: - Reset to Default
     
     private func performReset() {
@@ -278,6 +402,75 @@ struct BackupRestoreSection: View {
         alertTitle = title
         alertMessage = message
         showSuccessAlert = true
+    }
+}
+
+// MARK: - iCloud Sync Helper Views
+
+private func iCloudSyncStatusIcon(_ status: iCloudSyncStatus) -> some View {
+    Group {
+        switch status {
+        case .synced:
+            Image(systemName: "checkmark.icloud")
+                .foregroundColor(.green)
+        case .pushing:
+            Image(systemName: "icloud.and.arrow.up")
+                .foregroundColor(.blue)
+        case .pulling:
+            Image(systemName: "icloud.and.arrow.down")
+                .foregroundColor(.blue)
+        case .error:
+            Image(systemName: "exclamationmark.icloud")
+                .foregroundColor(.orange)
+        default:
+            Image(systemName: "icloud")
+                .foregroundColor(.secondary)
+        }
+    }
+    .font(.caption)
+}
+
+@ViewBuilder
+private func iCloudSyncStatusText(_ status: iCloudSyncStatus, lastSyncDate: Date?) -> some View {
+    switch status {
+    case .synced:
+        if let date = lastSyncDate {
+            let timeStr = date.formatted(date: .abbreviated, time: .shortened)
+            Text(String(localized: "Đã đồng bộ lúc \(timeStr)"))
+                .font(.caption)
+                .foregroundColor(.secondary)
+        } else {
+            Text("Đã đồng bộ")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    case .pushing:
+        Text("Đang tải lên iCloud...")
+            .font(.caption)
+            .foregroundColor(.blue)
+    case .pulling:
+        Text("Đang tải về từ iCloud...")
+            .font(.caption)
+            .foregroundColor(.blue)
+    case .error(let msg):
+        Text(msg)
+            .font(.caption)
+            .foregroundColor(.orange)
+    default:
+        Text("Chờ đồng bộ")
+            .font(.caption)
+            .foregroundColor(.secondary)
+    }
+}
+
+private func iCloudSyncItem(icon: String, text: String) -> some View {
+    HStack(spacing: 3) {
+        Image(systemName: icon)
+            .font(.system(size: 9))
+            .foregroundColor(.accentColor)
+        Text(text)
+            .font(.caption2)
+            .foregroundColor(.secondary)
     }
 }
 

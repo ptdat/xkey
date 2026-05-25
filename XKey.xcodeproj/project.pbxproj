@@ -27,6 +27,7 @@
 		100D2BE22EF2C59700C26B87 /* VowelSequenceValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000005 /* VowelSequenceValidator.swift */; };
 		100D2BE42EF2C71E00C26B87 /* IMKitHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100D2BE32EF2C71E00C26B87 /* IMKitHelper.swift */; };
 		100D2BE62EF2C72600C26B87 /* SharedSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100D2BE52EF2C72600C26B87 /* SharedSettings.swift */; };
+		ICLOUDSYNC001 /* iCloudSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ICLOUDSYNC002 /* iCloudSyncManager.swift */; };
 		10133E5C2EF04B0C00BBE6AE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 10133E5B2EF04B0C00BBE6AE /* Assets.xcassets */; };
 		101A44482ED419AE003F9D05 /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101A44472ED419AE003F9D05 /* Preferences.swift */; };
 		1025CD6E2F27CA13007B6E9F /* VNEngineBackspaceRestoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1025CD6D2F27CA13007B6E9F /* VNEngineBackspaceRestoreTests.swift */; };
@@ -110,6 +111,7 @@
 		DEBUGVIEW001 /* DebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEBUGVIEW002 /* DebugView.swift */; };
 		DEBUGVM001 /* DebugViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEBUGVM002 /* DebugViewModel.swift */; };
 		E2BB81375FD0B38574D4F669 /* SharedSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100D2BE52EF2C72600C26B87 /* SharedSettings.swift */; };
+		ICLOUDSYNC003 /* iCloudSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ICLOUDSYNC002 /* iCloudSyncManager.swift */; };
 		E52C23534F4E3183B55BE6D0 /* ExcludedAppsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB7B1CC880090240CFD79B3 /* ExcludedAppsSection.swift */; };
 		E575FD959786D9DC3A1E6856 /* ConvertToolSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A3D9B46E4A73E69A837ADAD /* ConvertToolSection.swift */; };
 		E93062521966136C34EDEC22 /* VNEngineSmartSwitch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AAC14FFBBB2B10B6A983B1A /* VNEngineSmartSwitch.swift */; };
@@ -122,6 +124,7 @@
 		FC31E5BF03BAE76EB0EF5881 /* CustomConsonantChipEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12D7FA2CC6EE444A4EB7B965 /* CustomConsonantChipEditor.swift */; };
 		FFFF798B22C18C084A0F7458 /* MacroSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49F58879C0DDD2958AA9FF0D /* MacroSection.swift */; };
 		L10N00001 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = L10N00002 /* Localizable.xcstrings */; };
+		ICLOUDSYNCTEST001 /* iCloudSyncManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ICLOUDSYNCTEST002 /* iCloudSyncManagerTests.swift */; };
 		LANG0001 /* AppLanguageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = LANG0002 /* AppLanguageTests.swift */; };
 		LAUNCHATLOGIN001 /* LaunchAtLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = LAUNCHATLOGIN002 /* LaunchAtLogin.swift */; };
 		MACR0001 /* MacroManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MACR0002 /* MacroManagerTests.swift */; };
@@ -158,6 +161,7 @@
 		100D2BDE2EF2C21800C26B87 /* XKeyRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = XKeyRelease.entitlements; sourceTree = "<group>"; };
 		100D2BE32EF2C71E00C26B87 /* IMKitHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMKitHelper.swift; sourceTree = "<group>"; };
 		100D2BE52EF2C72600C26B87 /* SharedSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedSettings.swift; sourceTree = "<group>"; };
+		ICLOUDSYNC002 /* iCloudSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iCloudSyncManager.swift; sourceTree = "<group>"; };
 		10133E5B2EF04B0C00BBE6AE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		101A44472ED419AE003F9D05 /* Preferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Preferences.swift; sourceTree = "<group>"; };
 		1025CD6D2F27CA13007B6E9F /* VNEngineBackspaceRestoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VNEngineBackspaceRestoreTests.swift; sourceTree = "<group>"; };
@@ -248,6 +252,7 @@
 		EXCLUDEDAPPS002 /* ExcludedAppsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExcludedAppsView.swift; sourceTree = "<group>"; };
 		F362794B762A19FE8D883F35 /* AdvancedSection.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AdvancedSection.swift; sourceTree = "<group>"; };
 		L10N00002 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		ICLOUDSYNCTEST002 /* iCloudSyncManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iCloudSyncManagerTests.swift; sourceTree = "<group>"; };
 		LANG0002 /* AppLanguageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguageTests.swift; sourceTree = "<group>"; };
 		LAUNCHATLOGIN002 /* LaunchAtLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLogin.swift; sourceTree = "<group>"; };
 		MACR0002 /* MacroManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacroManagerTests.swift; sourceTree = "<group>"; };
@@ -336,6 +341,7 @@
 				1089F7EB2EF76F2300E833ED /* OverlayAppDetector.swift */,
 				10FDCC1B2EF5942400B2D9AC /* InputSourceSwitcher.swift */,
 				100D2BE52EF2C72600C26B87 /* SharedSettings.swift */,
+				ICLOUDSYNC002 /* iCloudSyncManager.swift */,
 				100D2BE32EF2C71E00C26B87 /* IMKitHelper.swift */,
 				LAUNCHATLOGIN002 /* LaunchAtLogin.swift */,
 				APPVERSION002 /* AppVersion.swift */,
@@ -544,6 +550,7 @@
 				2259E2E83868C7ADD9DD4FF3 /* SessionMonitoringTests.swift */,
 				82224BF07EC7A838D6A022DB /* ToggleRulesTests.swift */,
 				LANG0002 /* AppLanguageTests.swift */,
+				ICLOUDSYNCTEST002 /* iCloudSyncManagerTests.swift */,
 				MACR0002 /* MacroManagerTests.swift */,
 			);
 			path = XKeyTests;
@@ -717,6 +724,7 @@
 				100D2BDC2EF2C1D800C26B87 /* InputProcessor.swift in Sources */,
 				100D2BDD2EF2C1D800C26B87 /* VNEngineSettings.swift in Sources */,
 				E2BB81375FD0B38574D4F669 /* SharedSettings.swift in Sources */,
+				ICLOUDSYNC003 /* iCloudSyncManager.swift in Sources */,
 				259D34BEC13552450AB30413 /* DebugLogger.swift in Sources */,
 				F97414DB17E4F78264530EF1 /* KeyCodeToCharacter.swift in Sources */,
 				TYPBUF003 /* TypingBuffer.swift in Sources */,
@@ -780,6 +788,7 @@
 				CONVERTVM001 /* ConvertToolViewModel.swift in Sources */,
 				EXCLUDEDAPPS001 /* ExcludedAppsView.swift in Sources */,
 				100D2BE62EF2C72600C26B87 /* SharedSettings.swift in Sources */,
+				ICLOUDSYNC001 /* iCloudSyncManager.swift in Sources */,
 				F97414DA17E4F78264530EF0 /* KeyCodeToCharacter.swift in Sources */,
 				795D22D182670DD83BDECF21 /* XKey/UI/WindowTitleRulesView.swift in Sources */,
 				10BEC2BC2F2675B200D6A3C3 /* TranslationNetworkManager.swift in Sources */,
@@ -838,6 +847,7 @@
 				64C427CD211649CE8B7DDCE2 /* SessionMonitoringTests.swift in Sources */,
 				8B4B48A67B6088E74942F573 /* ToggleRulesTests.swift in Sources */,
 				LANG0001 /* AppLanguageTests.swift in Sources */,
+				ICLOUDSYNCTEST001 /* iCloudSyncManagerTests.swift in Sources */,
 				MACR0001 /* MacroManagerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

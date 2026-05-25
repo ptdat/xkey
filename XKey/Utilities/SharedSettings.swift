@@ -965,8 +965,36 @@ class SharedSettings {
         )
     }
     
+    // MARK: - iCloud Sync Helpers
+
+    func exportSettingsForSync() -> Data? {
+        let dict = readPlistDict()
+        guard !dict.isEmpty else { return nil }
+        return try? PropertyListSerialization.data(fromPropertyList: dict, format: .binary, options: 0)
+    }
+
+    func importSettingsForSync(from data: Data) {
+        guard let dict = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] else { return }
+
+        isBatchUpdating = true
+        writePlistDict(dict)
+        isBatchUpdating = false
+
+        if let langRaw = dict[SharedSettingsKey.appLanguage.rawValue] as? String,
+           AppLanguage(rawValue: langRaw) != nil {
+            UserDefaults.standard.set(langRaw, forKey: "appLanguage")
+        }
+
+        notifySettingsChanged()
+        NotificationCenter.default.post(name: .tempOffToolbarSettingsDidChange, object: nil)
+        NotificationCenter.default.post(name: .convertToolHotkeyDidChange, object: nil)
+        NotificationCenter.default.post(name: .translationSettingsDidChange, object: nil)
+        NotificationCenter.default.post(name: .translationToolbarSettingsDidChange, object: nil)
+        NotificationCenter.default.post(name: .debugSettingsDidChange, object: nil)
+    }
+
     // MARK: - Export/Import Settings
-    
+
     /// Export all settings to a plist file
     /// - Returns: The exported plist data (XML format for human readability), or nil if export failed
     func exportSettings() -> Data? {

@@ -60,3 +60,5 @@ appcast.xml
 .agent/
 .serena/
 .playwright-mcp/
+.codegraph/
+.cursor/

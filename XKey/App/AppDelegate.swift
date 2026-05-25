@@ -252,6 +252,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Setup toggle window title rules hotkey
         setupToggleWindowRulesHotkey()
 
+        // Setup iCloud settings sync
+        iCloudSyncManager.shared.setup()
+
         // Setup Sparkle auto-update
         setupSparkleUpdater()
 
