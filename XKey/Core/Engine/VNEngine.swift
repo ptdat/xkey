@@ -3191,52 +3191,43 @@ extension VNEngine {
         return false
     }
     
-    /// Undo Vietnamese typing - restore original keystrokes
-    /// This restores the raw keystrokes before Vietnamese processing
-    /// Example: "tiếng" → "tieesng"
+    /// Undo Vietnamese typing - restore original keystrokes in actual typing order
+    /// Example: "manager" typed as m-a-n-a-g-e-r → engine shows "mângẻ" → undo restores "manager"
     func undoTyping() -> ProcessResult {
         logCallback?("undoTyping: index=\(index), stateIndex=\(stateIndex)")
-        
-        // Check if there's anything to undo
+
         guard index > 0 && stateIndex > 0 else {
             logCallback?("  → Nothing to undo (index=\(index), stateIndex=\(stateIndex))")
             return ProcessResult.doNothing
         }
-        
-        // Get original typed keys from keyStates
-        var originalKeys = [UInt32]()
-        for i in 0..<Int(stateIndex) {
-            originalKeys.append(keyStates[i])
-        }
-        
+
+        // Use typing-order sequence, not per-entry order which groups modifiers wrong
+        let originalKeys = buffer.getKeystrokeSequenceAsUInt32()
+
         guard !originalKeys.isEmpty else {
             logCallback?("  → No original keys found")
             return ProcessResult.doNothing
         }
-        
+
         logCallback?("  → Restoring \(originalKeys.count) original keys")
-        
-        // Build result
+
         var result = ProcessResult()
         result.shouldConsume = true
-        result.backspaceCount = Int(index)  // Delete current Vietnamese word
-        
-        // Convert original key codes to VNCharacters
+        result.backspaceCount = Int(index)
+
         for keyData in originalKeys {
             let keyCode = UInt16(keyData & VNEngine.CHAR_MASK)
             let isCaps = (keyData & VNEngine.CAPS_MASK) != 0
-            
-            // Convert key code to character
+
             if let char = keyCodeToCharacter(keyCode) {
                 let finalChar = isCaps ? Character(String(char).uppercased()) : char
                 result.newCharacters.append(VNCharacter(character: finalChar))
                 logCallback?("    → Key \(keyCode) → '\(finalChar)'")
             }
         }
-        
-        // Reset engine state after undo
+
         startNewSession()
-        
+
         return result
     }
     

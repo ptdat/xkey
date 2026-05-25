@@ -2435,6 +2435,159 @@ class VNEngineTests: XCTestCase {
                        "Second 'W' should undo standalone 'Ư' → 'W'")
     }
 
+    // MARK: - Undo Typing Tests
+
+    private func restoredString(_ result: VNEngine.ProcessResult) -> String {
+        result.newCharacters.map { $0.toUnicode() }.joined()
+    }
+
+    func testUndoTyping_manager_restoresCorrectOrder() {
+        engine.reset()
+        engine.vCheckSpelling = 0 // Match user config where r→mark on e
+        // "manager" → engine shows "mângẻ" → undo must restore "manager" not "maanger"
+        _ = engine.processKey(character: "m", keyCode: VietnameseData.KEY_M, isUppercase: false)
+        _ = engine.processKey(character: "a", keyCode: VietnameseData.KEY_A, isUppercase: false)
+        _ = engine.processKey(character: "n", keyCode: VietnameseData.KEY_N, isUppercase: false)
+        _ = engine.processKey(character: "a", keyCode: VietnameseData.KEY_A, isUppercase: false)
+        _ = engine.processKey(character: "g", keyCode: VietnameseData.KEY_G, isUppercase: false)
+        _ = engine.processKey(character: "e", keyCode: VietnameseData.KEY_E, isUppercase: false)
+        _ = engine.processKey(character: "r", keyCode: VietnameseData.KEY_R, isUppercase: false)
+
+        XCTAssertEqual(engine.getCurrentWord(), "mângẻ")
+        XCTAssertTrue(engine.canUndoTyping())
+        let result = engine.undoTyping()
+        XCTAssertTrue(result.shouldConsume)
+        XCTAssertEqual(result.backspaceCount, 5)
+        XCTAssertEqual(restoredString(result), "manager",
+            "Undo must restore actual typing order, not per-entry order 'maanger'")
+    }
+
+    func testUndoTyping_tieng_restoresTelex() {
+        engine.reset()
+        // "tieesng" → "tiếng"
+        _ = engine.processKey(character: "t", keyCode: VietnameseData.KEY_T, isUppercase: false)
+        _ = engine.processKey(character: "i", keyCode: VietnameseData.KEY_I, isUppercase: false)
+        _ = engine.processKey(character: "e", keyCode: VietnameseData.KEY_E, isUppercase: false)
+        _ = engine.processKey(character: "e", keyCode: VietnameseData.KEY_E, isUppercase: false)
+        _ = engine.processKey(character: "s", keyCode: VietnameseData.KEY_S, isUppercase: false)
+        _ = engine.processKey(character: "n", keyCode: VietnameseData.KEY_N, isUppercase: false)
+        _ = engine.processKey(character: "g", keyCode: VietnameseData.KEY_G, isUppercase: false)
+
+        XCTAssertTrue(engine.canUndoTyping())
+        let result = engine.undoTyping()
+        XCTAssertEqual(result.backspaceCount, 5)
+        XCTAssertEqual(restoredString(result), "tieesng")
+    }
+
+    func testUndoTyping_ddi_restoresRaw() {
+        engine.reset()
+        // "ddi" → "đi"
+        _ = engine.processKey(character: "d", keyCode: VietnameseData.KEY_D, isUppercase: false)
+        _ = engine.processKey(character: "d", keyCode: VietnameseData.KEY_D, isUppercase: false)
+        _ = engine.processKey(character: "i", keyCode: VietnameseData.KEY_I, isUppercase: false)
+
+        XCTAssertTrue(engine.canUndoTyping())
+        let result = engine.undoTyping()
+        XCTAssertEqual(result.backspaceCount, 2)
+        XCTAssertEqual(restoredString(result), "ddi")
+    }
+
+    func testUndoTyping_banana_nonAdjacentDoubleA() {
+        engine.reset()
+        engine.vCheckSpelling = 0
+        // b-a-n-a-n-a → multiple non-adjacent 'a' doublings
+        _ = engine.processKey(character: "b", keyCode: VietnameseData.KEY_B, isUppercase: false)
+        _ = engine.processKey(character: "a", keyCode: VietnameseData.KEY_A, isUppercase: false)
+        _ = engine.processKey(character: "n", keyCode: VietnameseData.KEY_N, isUppercase: false)
+        _ = engine.processKey(character: "a", keyCode: VietnameseData.KEY_A, isUppercase: false)
+        _ = engine.processKey(character: "n", keyCode: VietnameseData.KEY_N, isUppercase: false)
+        _ = engine.processKey(character: "a", keyCode: VietnameseData.KEY_A, isUppercase: false)
+
+        let word = engine.getCurrentWord()
+        if engine.canUndoTyping() {
+            let result = engine.undoTyping()
+            XCTAssertEqual(restoredString(result), "banana",
+                "Expected 'banana' from '\(word)'")
+        }
+    }
+
+    func testUndoTyping_safari_nonAdjacentDoubleA() {
+        engine.reset()
+        engine.vCheckSpelling = 0
+        // s-a-f-a-r-i → s marks vowel, aa doubles, r marks
+        _ = engine.processKey(character: "s", keyCode: VietnameseData.KEY_S, isUppercase: false)
+        _ = engine.processKey(character: "a", keyCode: VietnameseData.KEY_A, isUppercase: false)
+        _ = engine.processKey(character: "f", keyCode: VietnameseData.KEY_F, isUppercase: false)
+        _ = engine.processKey(character: "a", keyCode: VietnameseData.KEY_A, isUppercase: false)
+        _ = engine.processKey(character: "r", keyCode: VietnameseData.KEY_R, isUppercase: false)
+        _ = engine.processKey(character: "i", keyCode: VietnameseData.KEY_I, isUppercase: false)
+
+        let word = engine.getCurrentWord()
+        if engine.canUndoTyping() {
+            let result = engine.undoTyping()
+            XCTAssertEqual(restoredString(result), "safari",
+                "Expected 'safari' from '\(word)'")
+        }
+    }
+
+    func testUndoTyping_address_ddCollapse() {
+        engine.reset()
+        engine.vCheckSpelling = 0
+        // a-d-d-r-e-s-s → dd→đ, r→mark, s→mark
+        _ = engine.processKey(character: "a", keyCode: VietnameseData.KEY_A, isUppercase: false)
+        _ = engine.processKey(character: "d", keyCode: VietnameseData.KEY_D, isUppercase: false)
+        _ = engine.processKey(character: "d", keyCode: VietnameseData.KEY_D, isUppercase: false)
+        _ = engine.processKey(character: "r", keyCode: VietnameseData.KEY_R, isUppercase: false)
+        _ = engine.processKey(character: "e", keyCode: VietnameseData.KEY_E, isUppercase: false)
+        _ = engine.processKey(character: "s", keyCode: VietnameseData.KEY_S, isUppercase: false)
+        _ = engine.processKey(character: "s", keyCode: VietnameseData.KEY_S, isUppercase: false)
+
+        let word = engine.getCurrentWord()
+        if engine.canUndoTyping() {
+            let result = engine.undoTyping()
+            XCTAssertEqual(restoredString(result), "address",
+                "Expected 'address' from '\(word)'")
+        }
+    }
+
+    func testUndoTyping_google_adjacentOO() {
+        engine.reset()
+        engine.vCheckSpelling = 0
+        // g-o-o-g-l-e → oo→ô (adjacent — should still work)
+        _ = engine.processKey(character: "g", keyCode: VietnameseData.KEY_G, isUppercase: false)
+        _ = engine.processKey(character: "o", keyCode: VietnameseData.KEY_O, isUppercase: false)
+        _ = engine.processKey(character: "o", keyCode: VietnameseData.KEY_O, isUppercase: false)
+        _ = engine.processKey(character: "g", keyCode: VietnameseData.KEY_G, isUppercase: false)
+        _ = engine.processKey(character: "l", keyCode: VietnameseData.KEY_L, isUppercase: false)
+        _ = engine.processKey(character: "e", keyCode: VietnameseData.KEY_E, isUppercase: false)
+
+        let word = engine.getCurrentWord()
+        if engine.canUndoTyping() {
+            let result = engine.undoTyping()
+            XCTAssertEqual(restoredString(result), "google",
+                "Expected 'google' from '\(word)'")
+        }
+    }
+
+    func testCanUndoTyping_plainEnglish_returnsFalse() {
+        engine.reset()
+        // "thu" — no diacritics, nothing to undo
+        _ = engine.processKey(character: "t", keyCode: VietnameseData.KEY_T, isUppercase: false)
+        _ = engine.processKey(character: "h", keyCode: VietnameseData.KEY_H, isUppercase: false)
+        _ = engine.processKey(character: "u", keyCode: VietnameseData.KEY_U, isUppercase: false)
+
+        XCTAssertFalse(engine.canUndoTyping())
+    }
+
+    func testCanUndoTyping_afterCursorMove_returnsFalse() {
+        engine.reset()
+        _ = engine.processKey(character: "t", keyCode: VietnameseData.KEY_T, isUppercase: false)
+        _ = engine.processKey(character: "o", keyCode: VietnameseData.KEY_O, isUppercase: false)
+        _ = engine.processKey(character: "r", keyCode: VietnameseData.KEY_R, isUppercase: false)
+        engine.resetWithCursorMoved()
+
+        XCTAssertFalse(engine.canUndoTyping())
+    }
 }
 
 
