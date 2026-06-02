@@ -893,10 +893,10 @@ class AppBehaviorDetector {
         ),
 
         // ============================================
-        // Microsoft Office for the web (Word/Excel/PowerPoint Online, all browsers)
+        // Microsoft Word for the web (Word Online, all browsers)
         // ============================================
         //
-        // Office for the web renders into a custom "WAC" editing surface
+        // Word for the web renders into a custom "WAC" editing surface
         // (DOM class "WACEditing" / "EditingSurfaceBody"). Diacritics that XKey
         // injects via synthetic key events (the default .fast method) are held in
         // a provisional state and DROPPED when the surface loses focus (user clicks
@@ -907,21 +907,29 @@ class AppBehaviorDetector {
         // Fix: use the same slow + one-by-one strategy as Google Docs so the
         // editor has time to commit each character before the next event.
         //
-        // Matched by DOM class (robust across filenames and UI locales) rather
-        // than window title, since the title is only "<filename>.docx - <browser>".
+        // Matched purely by the ".docx" document extension in the WINDOW TITLE
+        // (always available) instead of DOM class: Chrome frequently exposes the
+        // editing surface as role=Unknown with NO AXDOMClassList, so a DOM/role
+        // match silently fails there. Applied to ALL apps (no browser allowlist),
+        // gated only by the Window Title Rules master toggle. Scoped to .docx
+        // (Word) only — Excel/PowerPoint Online use different editing surfaces and
+        // are not yet verified.
+        //
+        // NOTE: any window whose title contains ".docx" matches — including the
+        // native Word desktop app. Harmless (slow + one-by-one is correct
+        // everywhere, only slower than Word's tuned .fast), but be aware of it.
         WindowTitleRule(
-            name: "Office for the web",
-            bundleIdPattern: "",  // Match all browsers
-            titlePattern: "",     // Match any title — rely on DOM class below
-            matchMode: .contains,
-            axDOMClassList: ["WACEditing", "EditingSurfaceBody"],
+            name: "Word for the web",
+            bundleIdPattern: "",  // Match all apps — rely on the .docx window title
+            titlePattern: "\\.docx",
+            matchMode: .regex,
             useMarkedText: false,
             hasMarkedTextIssues: true,
             commitDelay: 5000,
             injectionMethod: .slow,
             injectionDelays: [5000, 10000, 8000],
             textSendingMethod: .oneByOne,
-            description: "Office for the web (Word/Excel/PowerPoint Online) - one-by-one like Google Docs"
+            description: "Word for the web (Word Online) - one-by-one like Google Docs"
         ),
     ]
 
