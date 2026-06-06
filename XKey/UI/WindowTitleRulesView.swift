@@ -1307,7 +1307,7 @@ struct AddRuleSheet: View {
             }
         }
         
-        let rule = WindowTitleRule(
+        var rule = WindowTitleRule(
             name: name,
             bundleIdPattern: bundleIdPattern,
             titlePattern: titlePattern,
@@ -1331,6 +1331,11 @@ struct AddRuleSheet: View {
         )
         
         if isEditing {
+            // Preserve the original id so the edit keeps a stable sync identity (UUID). Minting a
+            // new id would sync as delete+add and duplicate the rule on other devices.
+            if let existingId = existingRule?.id {
+                rule.id = existingId
+            }
             viewModel.updateRule(rule, originalId: existingRule?.id)
         } else {
             viewModel.addRule(rule)
@@ -1397,6 +1402,9 @@ class WindowTitleRulesViewModel: ObservableObject {
     
     /// Observer for app activation changes
     private var appActivationObserver: NSObjectProtocol?
+
+    /// Observer that refreshes the list when an iCloud pull rewrites the rules store.
+    private var rulesChangedObserver: NSObjectProtocol?
     
     var isDetectionAvailable: Bool {
         !currentAppName.isEmpty
@@ -1405,12 +1413,25 @@ class WindowTitleRulesViewModel: ObservableObject {
     init() {
         refresh()
         setupAppActivationObserver()
+
+        // Refresh the Settings list when a sync pull rewrites the rules store. Reload the store
+        // into the detector first so refresh() (which reads in-memory customRules) doesn't show
+        // stale rows if this fires before AppDelegate's observer. Idempotent with that reload.
+        rulesChangedObserver = NotificationCenter.default.addObserver(
+            forName: .windowTitleRulesDidChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            AppBehaviorDetector.shared.loadCustomRules()
+            self?.refresh()
+        }
     }
     
     deinit {
-        // Remove observer when ViewModel is deallocated
+        // Remove observers when ViewModel is deallocated
         if let observer = appActivationObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
+        if let observer = rulesChangedObserver {
+            NotificationCenter.default.removeObserver(observer)
         }
     }
     
@@ -1486,11 +1507,16 @@ class WindowTitleRulesViewModel: ObservableObject {
     }
 
     func updateRule(_ rule: WindowTitleRule, originalId: UUID?) {
-        if let id = originalId {
-            // Create new rule with original ID
-            // Update the rule (need to delete and re-add since ID is immutable)
-            AppBehaviorDetector.shared.removeCustomRule(id: id)
+        if let originalId = originalId, originalId != rule.id {
+            // Identity changed (defensive — saveRule preserves the id, so this is rare): remove and
+            // tombstone the old id so peers drop it, then add the new entry. Avoids a duplicate.
+            AppBehaviorDetector.shared.removeCustomRule(id: originalId)
+            SyncTombstoneStore.shared.record(category: .rules, id: originalId.uuidString)
             AppBehaviorDetector.shared.addCustomRule(rule)
+        } else {
+            // Same id: update in place. Preserves list order and the sync identity (UUID), so the
+            // edit merges by id (last-write-wins) without creating a duplicate on other devices.
+            AppBehaviorDetector.shared.updateCustomRule(rule)
         }
         refresh()
     }

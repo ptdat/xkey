@@ -268,7 +268,13 @@ final class iCloudSyncManager: NSObject {
     private func buildOutgoingEnvelope(for category: SyncCategory) throws -> SyncEnvelope {
         if category.usesPerEntryMerge {
             let liveEntries = snapshotLiveEntries(for: category)
+            // Never emit a tombstone for an id that is currently live — that would be contradictory
+            // state. Re-add paths already clear the tombstone, so this is defensive; it also keeps
+            // the payload minimal. (A re-added entry gets a fresh `now` timestamp via its new UUID
+            // signature, so it wins over any peer's older tombstone on merge regardless.)
+            let liveIDs = Set(liveEntries.map { $0.id })
             let tombstoneEntries = tombstones.tombstoneEntries(for: category)
+                .filter { !liveIDs.contains($0.id) }
             tombstones.prune(category: category)
             let payload = SyncCollectionPayload(entries: liveEntries + tombstoneEntries)
                 .prunedTombstones(retention: category.tombstoneRetention)
@@ -341,7 +347,14 @@ final class iCloudSyncManager: NSObject {
             defer { self.isPulling = false }
             if category.usesPerEntryMerge {
                 guard let remotePayload = try? SyncCollectionPayload.decode(from: envelope.payload) else { return }
-                let local = SyncCollectionPayload(entries: self.snapshotLiveEntries(for: category))
+                // Local payload must include local tombstones, not just live entries. Otherwise a
+                // local delete (a fresh tombstone) has nothing to compare against and a stale remote
+                // live entry resurrects it on merge — silently losing the deletion. Including the
+                // tombstone lets last-write-wins keep the newer delete.
+                let local = SyncCollectionPayload(
+                    entries: self.snapshotLiveEntries(for: category)
+                        + self.tombstones.tombstoneEntries(for: category)
+                )
                 let merged: SyncCollectionPayload
                 switch mode {
                 case .overwriteLocal:

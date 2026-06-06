@@ -39,7 +39,38 @@ struct MacroItem: Identifiable, Codable {
 
 class MacroManagementViewModel: ObservableObject {
     @Published var macros: [MacroItem] = []
-    
+
+    private var macrosChangedObserver: NSObjectProtocol?
+
+    init() {
+        // Keep an open Macro tab in sync with the store. When an iCloud pull applies a remote
+        // edit/delete it posts .macrosDidChange; without observing it here the list would show
+        // stale rows until the tab is reopened. Engine reload is handled separately by
+        // KeyboardEventHandler's own observer, so this only refreshes the published list.
+        macrosChangedObserver = NotificationCenter.default.addObserver(
+            forName: .macrosDidChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.reloadPublishedMacros()
+        }
+    }
+
+    deinit {
+        if let observer = macrosChangedObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    /// Re-read the published list from the store without touching the typing engine.
+    /// Idempotent: safe even when the change originated from this view model's own edits.
+    private func reloadPublishedMacros() {
+        if let data = SharedSettings.shared.getMacrosData(),
+           let decoded = try? JSONDecoder().decode([MacroItem].self, from: data) {
+            macros = decoded
+        } else {
+            macros = []
+        }
+    }
+
     // Get app delegate
     private func getAppDelegate() -> AppDelegate? {
         if Thread.isMainThread {
@@ -109,8 +140,11 @@ class MacroManagementViewModel: ObservableObject {
         // Save to plist first
         saveMacros()
 
-        // Adding a macro with a previously-tombstoned id (re-import case) clears the tombstone.
-        SyncTombstoneStore.shared.remove(category: .macros, id: macro.id.uuidString)
+        // Clear any stale tombstone for this abbreviation so the local store stays consistent
+        // (a live macro must not carry a tombstone). Cross-peer correctness is independent: the
+        // re-add gets a new UUID -> new signature -> fresh `now` timestamp, which already beats a
+        // peer's older tombstone on merge.
+        SyncTombstoneStore.shared.remove(category: .macros, id: macro.text)
 
         // Always post notification to ensure engine reloads macros
         log("   📢 Posting macrosDidChange notification...")
@@ -133,6 +167,15 @@ class MacroManagementViewModel: ObservableObject {
             macros[index] = MacroItem(id: macro.id, text: newText, content: newContent, isEnabled: macro.isEnabled)
             macros.sort { $0.text < $1.text }
             
+            // A rename changes the sync identity (which is `text`): tombstone the old abbreviation
+            // so peers drop it, and clear any stale tombstone on the new one to keep the local
+            // store consistent. The renamed entry carries a fresh timestamp, so it beats a peer's
+            // older tombstone for the new abbreviation on merge regardless.
+            if newText != macro.text {
+                SyncTombstoneStore.shared.record(category: .macros, id: macro.text)
+                SyncTombstoneStore.shared.remove(category: .macros, id: newText)
+            }
+            
             // Save to plist first
             saveMacros()
             
@@ -154,8 +197,8 @@ class MacroManagementViewModel: ObservableObject {
         saveMacros()
 
         // Record tombstone so the deletion propagates via iCloud sync instead of being
-        // overwritten by a peer that still has the entry.
-        SyncTombstoneStore.shared.record(category: .macros, id: macro.id.uuidString)
+        // overwritten by a peer that still has the entry. Keyed by `text` (the sync identity).
+        SyncTombstoneStore.shared.record(category: .macros, id: macro.text)
 
         // Always post notification to ensure engine reloads macros
         log("   📢 Posting macrosDidChange notification...")
@@ -194,15 +237,15 @@ class MacroManagementViewModel: ObservableObject {
     
     func clearAll() {
         log("clearAll called")
-        let deletedIDs = macros.map { $0.id.uuidString }
+        let deletedTexts = macros.map { $0.text }
         macros.removeAll()
 
         // Save to plist first
         saveMacros()
 
-        // Tombstone every cleared macro so the deletion propagates to peers.
-        for id in deletedIDs {
-            SyncTombstoneStore.shared.record(category: .macros, id: id)
+        // Tombstone every cleared macro (keyed by `text`) so the deletion propagates to peers.
+        for text in deletedTexts {
+            SyncTombstoneStore.shared.record(category: .macros, id: text)
         }
 
         // Always post notification to ensure engine reloads macros
@@ -249,6 +292,9 @@ class MacroManagementViewModel: ObservableObject {
                 // Decode escaped newlines (\n -> actual newline) for multi-line support
                 let decodedContent = macroContent.replacingOccurrences(of: "\\n", with: "\n")
                 macros.append(MacroItem(text: text, content: decodedContent))
+                // Re-importing a previously-deleted abbreviation clears its tombstone, keeping the
+                // local store consistent (a live macro must not carry a tombstone) — same as addMacro.
+                SyncTombstoneStore.shared.remove(category: .macros, id: text)
                 importedCount += 1
             }
             
@@ -332,6 +378,9 @@ class MacroManagementViewModel: ObservableObject {
             guard !text.isEmpty, !phrase.isEmpty,
                   !macros.contains(where: { $0.text == text }) else { continue }
             macros.append(MacroItem(text: text, content: phrase))
+            // Keep the local store consistent: a re-imported abbreviation must not retain a
+            // tombstone (mirrors addMacro / importMacros).
+            SyncTombstoneStore.shared.remove(category: .macros, id: text)
             added += 1
         }
 

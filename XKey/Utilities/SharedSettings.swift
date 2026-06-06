@@ -843,6 +843,10 @@ class SharedSettings {
     
     func setMacrosData(_ data: Data) {
         writeData(data, forKey: SharedSettingsKey.macrosData.rawValue)
+        // Macro list content lives in a dedicated sync category. Editing it must notify
+        // observers so iCloudSyncManager schedules a push — writeData alone is silent.
+        // During sync apply, isBatchUpdating suppresses this to avoid a push echo.
+        notifySettingsChanged()
     }
     
     // MARK: - Window Title Rules
@@ -853,6 +857,10 @@ class SharedSettings {
     
     func setWindowTitleRulesData(_ data: Data) {
         writeData(data, forKey: SharedSettingsKey.windowTitleRules.rawValue)
+        // Window Title Rules live in a dedicated sync category. Editing them must notify
+        // observers so iCloudSyncManager schedules a push — writeData alone is silent.
+        // During sync apply, isBatchUpdating suppresses this to avoid a push echo.
+        notifySettingsChanged()
     }
     
     // MARK: - Disabled Built-in Rules
@@ -1043,7 +1051,11 @@ class SharedSettings {
     // on model types that may not exist in every build target (e.g. MacroItem is UI-only).
 
     func snapshotMacrosForSync(timestampProvider: (String, Data) -> Date) -> [SyncEntry] {
-        Self.jsonArraySnapshot(getMacrosData(), idField: "id", timestampProvider: timestampProvider)
+        // Use the macro abbreviation (`text`) as the sync identity, not the per-device UUID.
+        // The UI already enforces `text` uniqueness, so this is the natural key: it lets a
+        // delete on one Mac match the same macro on another (even if each typed it locally
+        // with a different UUID) and collapses accidental duplicates on merge.
+        Self.jsonArraySnapshot(getMacrosData(), idField: "text", timestampProvider: timestampProvider)
     }
 
     func applyMacrosFromSync(liveEntries: [SyncEntry]) {
@@ -1052,6 +1064,11 @@ class SharedSettings {
         setMacrosData(encoded)
         isBatchUpdating = false
         notifySettingsChanged()
+        // The typing engine and the macro list observe .macrosDidChange, not
+        // .sharedSettingsDidChange. Without this post, a synced delete stays "live" in the
+        // engine (keeps expanding) and in any open Macro tab until the app restarts.
+        // Raw string keeps this file usable from targets that don't define the symbol (XKeyIM).
+        NotificationCenter.default.post(name: Notification.Name("XKey.macrosDidChange"), object: nil)
     }
 
     // MARK: Window title rules
@@ -1066,6 +1083,10 @@ class SharedSettings {
         setWindowTitleRulesData(encoded)
         isBatchUpdating = false
         notifySettingsChanged()
+        // The typing engine matches against AppBehaviorDetector's in-memory customRules, and the
+        // Settings tab shows its own copy — both must reload, or a synced edit/delete stays stale
+        // until app restart. Raw string keeps this usable from targets without the symbol (XKeyIM).
+        NotificationCenter.default.post(name: Notification.Name("XKey.windowTitleRulesDidChange"), object: nil)
     }
 
     // MARK: Excluded apps
@@ -1579,6 +1600,10 @@ extension Notification.Name {
     
     /// Posted when temp off toolbar settings change (enabled/disabled or hotkey)
     static let tempOffToolbarSettingsDidChange = Notification.Name("XKey.tempOffToolbarSettingsDidChange")
+
+    /// Posted after an iCloud pull rewrites the Window Title Rules store, so the typing engine
+    /// (AppBehaviorDetector.customRules) and any open Settings tab reload instead of staying stale.
+    static let windowTitleRulesDidChange = Notification.Name("XKey.windowTitleRulesDidChange")
 
     /// Posted when convert tool hotkey changes
     static let convertToolHotkeyDidChange = Notification.Name("XKey.convertToolHotkeyDidChange")

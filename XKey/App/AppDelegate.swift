@@ -192,6 +192,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Load custom Window Title Rules
         AppBehaviorDetector.shared.loadCustomRules()
         debugWindowController?.logEvent("Loaded \(AppBehaviorDetector.shared.getCustomRules().count) custom Window Title Rules")
+
+        // Reload rules into the engine when an iCloud pull rewrites the store. Matching reads
+        // AppBehaviorDetector.customRules live, so without this a synced edit/delete would not take
+        // effect until the next app launch. clearCache() drops any per-app behavior memoization.
+        NotificationCenter.default.addObserver(
+            forName: .windowTitleRulesDidChange, object: nil, queue: .main
+        ) { _ in
+            AppBehaviorDetector.shared.loadCustomRules()
+            AppBehaviorDetector.shared.clearCache()
+        }
         
         // Inject OverlayAppDetector into AppBehaviorDetector
         // This allows Shared/AppBehaviorDetector to detect overlay apps without direct dependency

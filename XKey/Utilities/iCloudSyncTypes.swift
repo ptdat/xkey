@@ -123,17 +123,27 @@ struct SyncCollectionPayload: Codable, Equatable {
 
     /// Per-entry last-write-wins merge. Tombstones win over live entries with older timestamps,
     /// which is how deletes propagate across devices.
+    ///
+    /// Order is preserved deterministically: local entries keep their original order, then any
+    /// new remote entries are appended. This matters for Window Title Rules, whose array position
+    /// is their cascade priority (later rules override earlier) — `Array(map.values)` would scramble
+    /// that on every merge since Swift dictionary value order is non-deterministic.
     func merged(with other: SyncCollectionPayload) -> SyncCollectionPayload {
         var map: [String: SyncEntry] = [:]
-        for e in entries { map[e.id] = e }
+        var order: [String] = []
+        for e in entries {
+            if map[e.id] == nil { order.append(e.id) }
+            map[e.id] = e
+        }
         for e in other.entries {
             if let existing = map[e.id] {
                 map[e.id] = e.updatedAt > existing.updatedAt ? e : existing
             } else {
                 map[e.id] = e
+                order.append(e.id)
             }
         }
-        return SyncCollectionPayload(entries: Array(map.values))
+        return SyncCollectionPayload(entries: order.compactMap { map[$0] })
     }
 
     /// Drop tombstones older than retention window so payload doesn't grow unbounded.
