@@ -360,6 +360,16 @@ struct MergedRuleResult {
 /// (e.g., Google Docs opened in Safari vs regular Safari browsing, Notion code blocks, etc.)
 struct WindowTitleRule: Codable, Identifiable {
     var id = UUID()
+
+    /// Cascade priority within custom rules, synced across devices. Lower index = applied earlier.
+    /// Drag-to-reorder rewrites these (see `reorderCustomRules`) so the order is encoded in synced
+    /// content — this bumps each entry's per-entry timestamp and makes the order converge on every
+    /// device. Cascade order is re-derived by sorting on `sortIndex` in `loadCustomRules`.
+    /// Legacy rules saved before this field decode as `unassignedSortIndex` and are migrated on load.
+    var sortIndex: Int = WindowTitleRule.unassignedSortIndex
+
+    /// Sentinel for rules decoded from pre-sortIndex data; migrated to a real index on load.
+    static let unassignedSortIndex = Int.max
     
     /// Name for display/debugging
     let name: String
@@ -534,7 +544,7 @@ struct WindowTitleRule: Codable, Identifiable {
     // MARK: - Codable
     
     enum CodingKeys: String, CodingKey {
-        case id, name, bundleIdPattern, titlePattern, matchMode, isEnabled
+        case id, name, bundleIdPattern, titlePattern, matchMode, isEnabled, sortIndex
         // AX matching patterns
         case axRolePattern, axDescriptionPattern, axIdentifierPattern, axDOMClassList
         // Behavior overrides
@@ -551,6 +561,7 @@ struct WindowTitleRule: Codable, Identifiable {
         titlePattern = try container.decode(String.self, forKey: .titlePattern)
         matchMode = try container.decode(WindowTitleMatchMode.self, forKey: .matchMode)
         isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+        sortIndex = try container.decodeIfPresent(Int.self, forKey: .sortIndex) ?? Self.unassignedSortIndex
         
         // Decode AX matching patterns
         axRolePattern = try container.decodeIfPresent(String.self, forKey: .axRolePattern)
@@ -593,6 +604,7 @@ struct WindowTitleRule: Codable, Identifiable {
         try container.encode(titlePattern, forKey: .titlePattern)
         try container.encode(matchMode, forKey: .matchMode)
         try container.encode(isEnabled, forKey: .isEnabled)
+        try container.encode(sortIndex, forKey: .sortIndex)
         
         // Encode AX matching patterns
         try container.encodeIfPresent(axRolePattern, forKey: .axRolePattern)
@@ -634,6 +646,7 @@ struct WindowTitleRule: Codable, Identifiable {
         titlePattern: String,
         matchMode: WindowTitleMatchMode,
         isEnabled: Bool = true,
+        sortIndex: Int = WindowTitleRule.unassignedSortIndex,
         // AX matching patterns
         axRolePattern: String? = nil,
         axDescriptionPattern: String? = nil,
@@ -657,6 +670,7 @@ struct WindowTitleRule: Codable, Identifiable {
         self.titlePattern = titlePattern
         self.matchMode = matchMode
         self.isEnabled = isEnabled
+        self.sortIndex = sortIndex
         // AX matching patterns
         self.axRolePattern = axRolePattern
         self.axDescriptionPattern = axDescriptionPattern
@@ -1761,11 +1775,34 @@ class AppBehaviorDetector {
     
     // MARK: - Custom Rules Management
     
-    /// Load custom rules from preferences
+    /// Load custom rules from preferences.
+    /// Cascade order is derived by sorting on `sortIndex` (tie-broken by id) so it is determined
+    /// purely by synced content — this is what makes drag-to-reorder converge across devices.
     func loadCustomRules() {
-        if let data = SharedSettings.shared.getWindowTitleRulesData(),
-           let rules = try? JSONDecoder().decode([WindowTitleRule].self, from: data) {
-            customRules = rules
+        guard let data = SharedSettings.shared.getWindowTitleRulesData(),
+              var rules = try? JSONDecoder().decode([WindowTitleRule].self, from: data) else {
+            return
+        }
+
+        // Migration: rules saved before `sortIndex` existed decode as `unassignedSortIndex`.
+        // Assign sequential indices following their stored array order so the visible order is
+        // preserved on upgrade, then persist once so the next push carries the new field.
+        var migrated = false
+        var nextIndex = 0
+        for i in rules.indices {
+            if rules[i].sortIndex == WindowTitleRule.unassignedSortIndex {
+                rules[i].sortIndex = nextIndex
+                migrated = true
+            }
+            nextIndex = max(nextIndex, rules[i].sortIndex + 1)
+        }
+
+        // Tie-break by id so two devices that concurrently land on the same index still converge.
+        rules.sort { ($0.sortIndex, $0.id.uuidString) < ($1.sortIndex, $1.id.uuidString) }
+        customRules = rules
+
+        if migrated {
+            saveCustomRules()
         }
     }
     
@@ -1776,9 +1813,18 @@ class AppBehaviorDetector {
         }
     }
     
-    /// Add a custom rule
+    /// Add a custom rule (appended after all existing rules in cascade order).
     func addCustomRule(_ rule: WindowTitleRule) {
-        customRules.append(rule)
+        var newRule = rule
+        // Place it last so a fresh rule never reorders existing ones; the synced index keeps
+        // that position consistent across devices. Exclude the unassigned sentinel (Int.max) so a
+        // not-yet-migrated rule can't overflow the `+ 1` (defensive — loadCustomRules migrates first).
+        let maxAssigned = customRules
+            .map { $0.sortIndex }
+            .filter { $0 != WindowTitleRule.unassignedSortIndex }
+            .max() ?? -1
+        newRule.sortIndex = maxAssigned + 1
+        customRules.append(newRule)
         saveCustomRules()
         clearCache()
     }
@@ -1790,10 +1836,15 @@ class AppBehaviorDetector {
         clearCache()
     }
     
-    /// Update a custom rule
+    /// Update a custom rule in place, preserving its cascade position.
+    /// The incoming rule is rebuilt by the editor and carries no `sortIndex`, so we keep the
+    /// existing one — otherwise an edit (or toggle) would move the rule to the end and desync
+    /// order across devices.
     func updateCustomRule(_ rule: WindowTitleRule) {
         if let index = customRules.firstIndex(where: { $0.id == rule.id }) {
-            customRules[index] = rule
+            var updated = rule
+            updated.sortIndex = customRules[index].sortIndex
+            customRules[index] = updated
             saveCustomRules()
             clearCache()
         }
@@ -1804,10 +1855,16 @@ class AppBehaviorDetector {
         return customRules
     }
     
-    /// Reorder custom rules (after drag & drop)
-    /// The new order determines the application priority (later rules override earlier)
+    /// Reorder custom rules (after drag & drop).
+    /// The new array position becomes each rule's `sortIndex`, so the order is encoded in synced
+    /// content (bumping per-entry timestamps) and converges on every device after the next sync.
+    /// Later rules override earlier ones (cascade priority).
     func reorderCustomRules(_ newOrder: [WindowTitleRule]) {
-        customRules = newOrder
+        var rules = newOrder
+        for i in rules.indices {
+            rules[i].sortIndex = i
+        }
+        customRules = rules
         saveCustomRules()
         clearCache()
     }

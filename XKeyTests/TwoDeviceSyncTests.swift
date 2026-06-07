@@ -66,11 +66,15 @@ private final class SyncDevice {
         tombstones.record(category: category, id: id, at: at)
     }
 
-    /// Reorder the live store explicitly (models drag-to-reorder of rules).
-    func reorder(_ ids: [String]) {
-        var byId = [String: SyncEntry]()
-        for e in live { byId[e.id] = e }
-        live = ids.compactMap { byId[$0] }
+    /// Model drag-to-reorder the way the production fix does it: each rule's cascade position is
+    /// written into its synced content (`sortIndex`, modeled here as the entry's data) and the
+    /// entry timestamp is bumped. Because order now lives in synced content, it propagates by the
+    /// same per-entry LWW as any edit — this is what makes reorder converge across devices.
+    /// Mirrors AppBehaviorDetector.reorderCustomRules (writes index) + loadCustomRules (sorts on it).
+    func reorder(_ ids: [String], at: Date) {
+        for (index, id) in ids.enumerated() {
+            set(id, String(index), at: at)
+        }
     }
 
     // MARK: Payload build / apply
@@ -112,6 +116,17 @@ private final class SyncDevice {
 
     /// Ordered live ids (for cascade-order assertions).
     func liveOrder() -> [String] { live.map { $0.id } }
+
+    /// Cascade order derived from the synced sortIndex (modeled as the entry's data), tie-broken
+    /// by id. Mirrors AppBehaviorDetector.loadCustomRules' sort, which is what makes reorder
+    /// converge: the order is a pure function of synced content, not local array position.
+    func orderBySortIndex() -> [String] {
+        live.sorted {
+            let l = Int(String(decoding: $0.data ?? Data(), as: UTF8.self)) ?? Int.max
+            let r = Int(String(decoding: $1.data ?? Data(), as: UTF8.self)) ?? Int.max
+            return (l, $0.id) < (r, $1.id)
+        }.map { $0.id }
+    }
 }
 
 // MARK: - Fake cloud (single slot per category = KVS last-writer-wins)
@@ -310,28 +325,29 @@ final class TwoDeviceSyncTests: XCTestCase {
         assertConverged()
     }
 
-    // MARK: #9 — reorder does NOT converge cross-device (documented limitation)
+    // MARK: #9 — reorder DOES converge cross-device (synced sortIndex)
 
-    func testReorderDoesNotConvergeCrossDevice() {
+    func testReorderConvergesCrossDevice() {
         let rulesA = SyncDevice(name: "rA", category: .rules)
         let rulesB = SyncDevice(name: "rB", category: .rules)
         let sky = FakeCloud()
-        for id in ["r1", "r2", "r3"] { rulesA.set(id, id, at: at(0)) }
+        // Seed identical synced order via sortIndex (data = index string), then steady-state sync.
+        rulesA.reorder(["r1", "r2", "r3"], at: at(0))
         syncNow(rulesA, sky)
         syncNow(rulesB, sky)
-        XCTAssertEqual(rulesB.liveOrder(), ["r1", "r2", "r3"])
+        XCTAssertEqual(rulesB.orderBySortIndex(), ["r1", "r2", "r3"])
 
-        // Each device reorders differently, then both sync.
-        rulesA.reorder(["r1", "r2", "r3"])
-        rulesB.reorder(["r3", "r2", "r1"])
+        // Each device reorders differently; B's reorder is strictly newer, so it wins by LWW.
+        rulesA.reorder(["r1", "r2", "r3"], at: at(10))
+        rulesB.reorder(["r3", "r2", "r1"], at: at(20))
         syncNow(rulesA, sky)
         syncNow(rulesB, sky)
-        syncNow(rulesA, sky)
+        syncNow(rulesA, sky)   // extra round for eventual consistency
 
-        // Data (id set) converges; order does NOT (no per-order timestamp in the model).
-        XCTAssertEqual(Set(rulesA.liveOrder()), Set(rulesB.liveOrder()))
-        XCTAssertEqual(rulesA.liveOrder(), ["r1", "r2", "r3"], "A keeps its own order")
-        XCTAssertEqual(rulesB.liveOrder(), ["r3", "r2", "r1"], "B keeps its own order")
+        // Order is now encoded in synced content, so it converges to the newer write on both devices.
+        XCTAssertEqual(rulesA.orderBySortIndex(), rulesB.orderBySortIndex(), "order must converge")
+        XCTAssertEqual(rulesB.orderBySortIndex(), ["r3", "r2", "r1"], "newer reorder must win")
+        XCTAssertEqual(rulesA.orderBySortIndex(), ["r3", "r2", "r1"], "A adopts the newer order")
         rulesA.tombstones.clearAll(); rulesB.tombstones.clearAll()
     }
 
