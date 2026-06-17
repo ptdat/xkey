@@ -89,6 +89,7 @@ struct Preferences: Codable {
     var quickStartConsonantEnabled: Bool = false // f→ph, j→gi, w→qu
     var quickEndConsonantEnabled: Bool = false   // g→ng, h→nh, k→ch
     var upperCaseFirstChar: Bool = false         // Auto capitalize first letter
+    var capitalizeOnlyAfterSpace: Bool = true    // Sub-option: only capitalize after . ? ! when followed by a space (newline still always caps)
     var restoreIfWrongSpelling: Bool = true      // Restore if wrong spelling
     var instantRestoreOnWrongSpelling: Bool = false // Restore immediately when wrong spelling detected
     var customConsonantEnabled: Bool = false         // Whether custom consonants feature is enabled

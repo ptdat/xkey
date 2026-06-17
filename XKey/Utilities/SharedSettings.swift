@@ -35,6 +35,7 @@ enum SharedSettingsKey: String {
     case quickStartConsonantEnabled = "XKey.quickStartConsonantEnabled"
     case quickEndConsonantEnabled = "XKey.quickEndConsonantEnabled"
     case upperCaseFirstChar = "XKey.upperCaseFirstChar"
+    case capitalizeOnlyAfterSpace = "XKey.capitalizeOnlyAfterSpace"
     case restoreIfWrongSpelling = "XKey.restoreIfWrongSpelling"
     case instantRestoreOnWrongSpelling = "XKey.instantRestoreOnWrongSpelling"
 
@@ -151,6 +152,7 @@ class SharedSettings {
         SharedSettingsKey.spellCheckEnabled.rawValue: false,
         SharedSettingsKey.quickTelexEnabled.rawValue: false,
         SharedSettingsKey.restoreIfWrongSpelling.rawValue: true,
+        SharedSettingsKey.capitalizeOnlyAfterSpace.rawValue: true,
         SharedSettingsKey.smartSwitchEnabled.rawValue: true,
         SharedSettingsKey.imkitUseMarkedText.rawValue: true,
         SharedSettingsKey.translationCopyToClipboard.rawValue: true,
@@ -448,6 +450,11 @@ class SharedSettings {
     var upperCaseFirstChar: Bool {
         get { readBool(forKey: SharedSettingsKey.upperCaseFirstChar.rawValue) }
         set { writeBool(newValue, forKey: SharedSettingsKey.upperCaseFirstChar.rawValue) }
+    }
+
+    var capitalizeOnlyAfterSpace: Bool {
+        get { readBool(forKey: SharedSettingsKey.capitalizeOnlyAfterSpace.rawValue) }
+        set { writeBool(newValue, forKey: SharedSettingsKey.capitalizeOnlyAfterSpace.rawValue) }
     }
 
     var restoreIfWrongSpelling: Bool {
@@ -1415,6 +1422,7 @@ class SharedSettings {
         prefs.quickStartConsonantEnabled = quickStartConsonantEnabled
         prefs.quickEndConsonantEnabled = quickEndConsonantEnabled
         prefs.upperCaseFirstChar = upperCaseFirstChar
+        prefs.capitalizeOnlyAfterSpace = capitalizeOnlyAfterSpace
         prefs.restoreIfWrongSpelling = restoreIfWrongSpelling
         prefs.instantRestoreOnWrongSpelling = instantRestoreOnWrongSpelling
 
@@ -1593,6 +1601,7 @@ class SharedSettings {
         quickStartConsonantEnabled = prefs.quickStartConsonantEnabled
         quickEndConsonantEnabled = prefs.quickEndConsonantEnabled
         upperCaseFirstChar = prefs.upperCaseFirstChar
+        capitalizeOnlyAfterSpace = prefs.capitalizeOnlyAfterSpace
         restoreIfWrongSpelling = prefs.restoreIfWrongSpelling
         instantRestoreOnWrongSpelling = prefs.instantRestoreOnWrongSpelling
 

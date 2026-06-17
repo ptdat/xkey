@@ -389,6 +389,7 @@ class DebugViewModel: ObservableObject {
         let consonantsStr = settings.customConsonants
         lines.append("  Custom Consonants: \(consonantsStr.isEmpty ? "OFF" : consonantsStr)")
         lines.append("  Upper Case First Char: \(settings.upperCaseFirstChar ? "ON" : "OFF")")
+        lines.append("  Capitalize Only After Space: \(settings.capitalizeOnlyAfterSpace ? "ON" : "OFF")")
         lines.append("  Undo Typing: \(settings.undoTypingEnabled ? "ON" : "OFF")")
         lines.append("  Beep on Toggle: \(settings.beepOnToggle ? "ON" : "OFF")")
         lines.append("")

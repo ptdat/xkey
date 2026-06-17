@@ -34,7 +34,20 @@ struct AdvancedSection: View {
                 SettingsGroup(title: "Chính tả & Viết hoa") {
                     VStack(alignment: .leading, spacing: 10) {
                         Toggle("Tự động viết hoa chữ đầu câu", isOn: $viewModel.preferences.upperCaseFirstChar)
-                        
+
+                        // Sub-option: only capitalize after sentence-ending punctuation when followed by a space
+                        if viewModel.preferences.upperCaseFirstChar {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Toggle("Chỉ viết hoa khi sau dấu câu có dấu cách", isOn: $viewModel.preferences.capitalizeOnlyAfterSpace)
+                                    .padding(.leading, 20)
+
+                                Text("Nếu bật: chỉ viết hoa sau \". ? !\" khi theo sau là dấu cách (vd \"google.com\", \"3.14\", \"file.txt\" không bị viết hoa). Xuống dòng vẫn luôn viết hoa. Nếu tắt: viết hoa ngay sau dấu câu kể cả khi không có dấu cách.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .padding(.leading, 20)
+                            }
+                        }
+
                         // Custom consonants toggle + chip editor
                         CustomConsonantChipEditor(isEnabled: $viewModel.preferences.customConsonantEnabled, customConsonants: $viewModel.preferences.customConsonants)
 

@@ -76,7 +76,11 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
     @Published var upperCaseFirstChar: Bool = false {
         didSet { updateEngineSettings() }
     }
-    
+
+    @Published var capitalizeOnlyAfterSpace: Bool = true {
+        didSet { updateEngineSettings() }
+    }
+
     @Published var restoreIfWrongSpelling: Bool = true {
         didSet { updateEngineSettings() }
     }
@@ -725,6 +729,7 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
         settings.quickStartConsonantEnabled = quickStartConsonantEnabled
         settings.quickEndConsonantEnabled = quickEndConsonantEnabled
         settings.upperCaseFirstChar = upperCaseFirstChar
+        settings.capitalizeOnlyAfterSpace = capitalizeOnlyAfterSpace
         settings.restoreIfWrongSpelling = restoreIfWrongSpelling
 
         settings.customConsonants = VietnameseData.parseCustomConsonants(customConsonants)
@@ -760,6 +765,7 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
         quickStartConsonantEnabled: Bool,
         quickEndConsonantEnabled: Bool,
         upperCaseFirstChar: Bool,
+        capitalizeOnlyAfterSpace: Bool,
         restoreIfWrongSpelling: Bool,
         customConsonants: String,
         macroEnabled: Bool,
@@ -783,6 +789,7 @@ class KeyboardEventHandler: EventTapManager.EventTapDelegate {
         self.quickStartConsonantEnabled = quickStartConsonantEnabled
         self.quickEndConsonantEnabled = quickEndConsonantEnabled
         self.upperCaseFirstChar = upperCaseFirstChar
+        self.capitalizeOnlyAfterSpace = capitalizeOnlyAfterSpace
         self.restoreIfWrongSpelling = restoreIfWrongSpelling
         self.customConsonants = customConsonants
         self.macroEnabled = macroEnabled

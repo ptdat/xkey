@@ -68,6 +68,7 @@ class VNEngine {
     var vAddSpaceAfterMacro = 0    // 0: No, 1: Yes (add space after macro expansion)
     var vUseSmartSwitchKey = 0     // 0: No, 1: Yes
     var vUpperCaseFirstChar = 0    // 0: No, 1: Yes
+    var vUpperCaseRequireSpace = 1 // 0: cap right after . ? ! even with no space; 1: require a space after . ? ! (newline always caps)
     var vTempOffSpelling = 0       // 0: No, 1: Yes (temp off spell check via toolbar)
     var vTempOffEngine = 0         // 0: No, 1: Yes (temp off engine via toolbar)
     var vCustomConsonants: Set<UInt16> = [] // Custom consonants allowed (e.g., Z, F, W, J, K)
@@ -649,12 +650,18 @@ class VNEngine {
         }
         
         // Upper case first char
-        // Status 1 = after period ("."), status 2 = after newline
-        // Both should trigger auto-capitalize on the first character of the next word
+        // Status 1 = after . ? ! (no space yet), 2 = after newline, 3 = after . ? ! + space.
+        // When vUpperCaseRequireSpace == 1 (default): only status 2 or 3 capitalize, so
+        // "google.com"/"3.14"/"file.txt" stay untouched but "Hello. world" and newlines
+        // still capitalize. When 0 (legacy): any status >= 1 capitalizes (cap even with no
+        // space after punctuation).
         // Skip in browser address bars — "." is a domain separator, not a sentence end
         // (e.g. "google.com" must not become "google.Com").
         if vUpperCaseFirstChar == 1 {
-            if index == 1 && upperCaseStatus >= 1 && !AppBehaviorDetector.shared.isInBrowserAddressBar() {
+            let pendingCapitalize = vUpperCaseRequireSpace == 1
+                ? (upperCaseStatus == 2 || upperCaseStatus == 3)
+                : (upperCaseStatus >= 1)
+            if index == 1 && pendingCapitalize && !AppBehaviorDetector.shared.isInBrowserAddressBar() {
                 upperCaseFirstCharacter()
             }
             upperCaseStatus = 0
@@ -3110,20 +3117,28 @@ class VNEngine {
     ///
     /// Status values:
     ///   0 = no pending capitalize
-    ///   1 = after sentence-ending punctuation (., ?, !)
+    ///   1 = after sentence-ending punctuation (., ?, !), no space seen yet
     ///   2 = after newline (\n, \r)
+    ///   3 = after sentence-ending punctuation AND at least one space seen
     func updateUpperCaseStatus(character: Character) {
         guard vUpperCaseFirstChar == 1 else { return }
         if character == "." || character == "?" || character == "!" {
             upperCaseStatus = 1
         } else if character == "\n" || character == "\r" {
             upperCaseStatus = 2
-        } else if character != " " {
-            // Only reset if NOT space — space should preserve pending capitalize status
-            // Flow: sentence-end punctuation → space(s) → next char should be capitalized
+        } else if character == " " {
+            // A space after sentence-ending punctuation (status 1) upgrades to status 3
+            // ("space seen"). Newline (2) and already-space-seen (3) are preserved, so
+            // multiple spaces and "punctuation → space" both end up capitalizable.
+            // Flow: sentence-end punctuation → space(s) → next char should be capitalized.
+            if upperCaseStatus == 1 {
+                upperCaseStatus = 3
+            }
+        } else {
+            // Any other character cancels the pending capitalize.
             upperCaseStatus = 0
         }
-        // If space: keep upperCaseStatus as-is (preserves period/newline status)
+        // If space: keep/upgrade upperCaseStatus (preserves period/newline status)
     }
 
     /// Notify engine that focus changed during typing session

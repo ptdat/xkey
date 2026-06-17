@@ -22,6 +22,7 @@ extension VNEngine {
         var quickStartConsonantEnabled: Bool = false
         var quickEndConsonantEnabled: Bool = false
         var upperCaseFirstChar: Bool = false
+        var capitalizeOnlyAfterSpace: Bool = true   // Only capitalize after . ? ! when followed by a space (newline still always caps)
         var restoreIfWrongSpelling: Bool = true
 
         var customConsonants: Set<UInt16> = []
@@ -72,6 +73,7 @@ extension VNEngine {
             upperCaseStatus = 0
         }
         vUpperCaseFirstChar = settings.upperCaseFirstChar ? 1 : 0
+        vUpperCaseRequireSpace = settings.capitalizeOnlyAfterSpace ? 1 : 0
         vRestoreIfWrongSpelling = settings.restoreIfWrongSpelling ? 1 : 0
 
         vCustomConsonants = settings.customConsonants
@@ -120,6 +122,7 @@ extension VNEngine {
         settings.quickStartConsonantEnabled = vQuickStartConsonant == 1
         settings.quickEndConsonantEnabled = vQuickEndConsonant == 1
         settings.upperCaseFirstChar = vUpperCaseFirstChar == 1
+        settings.capitalizeOnlyAfterSpace = vUpperCaseRequireSpace == 1
         settings.restoreIfWrongSpelling = vRestoreIfWrongSpelling == 1
         settings.customConsonants = vCustomConsonants
         
